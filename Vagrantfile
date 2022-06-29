@@ -49,6 +49,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
         node.vm.network "forwarded_port", guest: "53", host: "53"
         node.vm.network "forwarded_port", guest: "80", host: "80"
         node.vm.network "forwarded_port", guest: "443", host: "443"
+        node.vm.network "forwarded_port", guest: "2022", host: "2022"
         node.vm.provision "ansible" do |ansible|
             ansible.limit = "all"
             ansible.playbook ="playbooks/init.yaml"

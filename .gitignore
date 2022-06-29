@@ -1,2 +1,4 @@
 .idea/
 .vagrant/
+/playbooks/config/docker/traefik/config/client.crt
+

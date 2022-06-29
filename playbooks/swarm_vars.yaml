@@ -1,0 +1,4 @@
+
+traefik_network_name: traefik_public # hard-coded in the traefik setup
+network_domain_name: example.org
+network_domain_email: admin@example.org

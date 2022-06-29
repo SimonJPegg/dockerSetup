@@ -1,0 +1,98 @@
+version: '3.7'
+
+x-default-opts:
+  &default-opts
+  logging:
+    options:
+      max-size: "1m"
+
+services:
+  server:
+    <<: *default-opts
+    image: traefik:v2.2
+    ports:
+      - target: 2022
+        published: 2022
+        protocol: tcp
+      - target: 53
+        published: 53
+        protocol: udp
+      - target: 53
+        published: 53
+        protocol: tcp
+      - target: 80
+        published: 80
+        protocol: tcp
+      - target: 443
+        published: 443
+        protocol: tcp
+    environment:
+      - AWS_ACCESS_KEY_ID={{ aws_access_key }}
+      - AWS_SECRET_ACCESS_KEY={{ aws_secret_key }}
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 500M
+      placement:
+        constraints:
+          - node.role == manager
+      labels:
+        - traefik.enable=true
+        - traefik.constraint-label={{ traefik_network_name }}
+        - traefik.docker.network={{ traefik_network_name }}
+        - traefik.http.middlewares.https-redirect.redirectscheme.scheme=https
+        - traefik.http.middlewares.https-redirect.redirectscheme.permanent=true
+        - traefik.http.routers.traefik-public-http.rule=Host(`traefik.{{ network_domain_name }}`)
+        - traefik.http.routers.traefik-public-http.entrypoints=http
+        - traefik.http.routers.traefik-public-http.middlewares=https-redirect
+        - traefik.http.routers.traefik-public-https.rule=Host(`traefik.{{ network_domain_name }}`)
+        - traefik.http.routers.traefik-public-https.entrypoints=https
+        - traefik.http.routers.traefik-public-https.tls=true
+        - traefik.http.routers.traefik-public-https.tls.options=enforceClientCert@file
+        - traefik.http.routers.traefik-public-https.service=api@internal
+        - traefik.http.routers.traefik-public-https.tls.certresolver=le
+        - traefik.http.services.traefik-public.loadbalancer.server.port=8080
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /srv/docker/volumes/traefik/certificates/:/certificates
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    configs:
+      - source: dynamic_config
+        target: /etc/traefik/dynamic.yaml
+      - source: client_cert
+        target: /certs/client.crt
+    command:
+      - --providers.docker
+      - --providers.docker.constraints=Label(`traefik.constraint-label`, `{{ traefik_network_name }}`)
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.swarmmode=true
+      - --providers.file
+      - --providers.file.directory=/etc/traefik
+      - --providers.file.watch=true
+      - --entrypoints.http.address=:80
+      - --entrypoints.ssh.address=:2022
+      - --entrypoints.https.address=:443
+      - --entrypoints.dnstcp.address=:53
+      - --entrypoints.dnsudp.address=:53/udp
+      - --certificatesresolvers.le.acme.email={{ network_domain_email }}
+      - --certificatesresolvers.le.acme.storage=/certificates/acme.json
+      - --certificatesresolvers.le.acme.tlschallenge=false
+      - --certificatesresolvers.le.acme.dnschallenge.provider=route53
+      - --certificatesresolvers.le.acme.dnschallenge.delaybeforecheck=0
+      - --accesslog
+      - --log
+      - --api
+    networks:
+      - traefik-public
+
+configs:
+  dynamic_config:
+    file: /srv/docker/volumes/traefik/dynamic.yaml
+  client_cert:
+    file: /srv/docker/volumes/traefik/client.crt
+
+networks:
+  traefik-public:
+    external: true

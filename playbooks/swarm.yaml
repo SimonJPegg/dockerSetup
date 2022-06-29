@@ -61,7 +61,7 @@
 
     - name: add group
       become: true
-      user: name="{{ ansible_user_id }}" groups=docker append=yes generate_ssh_key=yes
+      user: name="vagrant" groups=docker append=yes generate_ssh_key=yes
       register: add_group
 
     - name: reset ssh connection to allow user changes to affect 'current login user'
@@ -74,7 +74,6 @@
 
 
 - hosts: swarmControllers
-  gather_facts: yes
   tasks:
     - name: create swarm manager
       shell: docker swarm init --advertise-addr {{ ansible_default_ipv4.address }}

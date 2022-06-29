@@ -1,0 +1,59 @@
+---
+- hosts: swarmControllers
+  vars_prompt:
+    - name: aws_access_key
+      prompt: Enter the AWS Access Key for DNS validation
+    - name: aws_secret_key
+      prompt: Enter the AWS secret Key for DNS validation
+  vars_files:
+    - swarm_vars.yaml
+  tasks:
+    - name: Create the config directoru
+      become: true
+      file: path=/srv/docker/volumes/traefik state=directory mode=755 owner=vagrant group=vagrant
+
+    - name: Create the certifcates directory
+      become: true
+      file: path=/srv/docker/volumes/traefik/certificates/ state=directory mode=755 owner=vagrant group=vagrant
+
+
+    - name: copy client certificate
+      # not checked in, don't forget to add this.
+      template:
+        src: "{{ playbook_dir }}/config/docker/traefik/config/client.crt"
+        dest: /srv/docker/volumes/traefik/client.crt
+        backup: yes
+        owner: vagrant
+        group: vagrant
+        mode: 0644
+
+    - name: copy dynamic config
+      template:
+        src: "{{ playbook_dir }}/config/docker/traefik/config/dynamic.yaml"
+        dest: /srv/docker/volumes/traefik/dynamic.yaml
+        backup: yes
+        owner: vagrant
+        group: vagrant
+        mode: 0644
+
+    - name: copy service description
+      become: true
+      template:
+        src: "{{ playbook_dir }}/config/docker/traefik/traefik.yml.j2"
+        dest: /srv/docker/traefik.yml
+        backup: yes
+        owner: vagrant
+        group: vagrant
+        mode: 0600
+
+    - name: Get docker network info
+      shell: docker network ls
+      register: docker_network_info
+      changed_when: False
+
+    - name: create traefik network
+      shell: docker network create --driver=overlay {{ traefik_network_name }}
+      when: '"traefik_public" not in docker_network_info.stdout'
+
+    - name: update traefik service
+      shell: docker stack deploy -c /srv/docker/traefik.yml traefik
