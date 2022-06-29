@@ -1,0 +1,24 @@
+#	$OpenBSD: sshd_config,v 1.103 2018/04/09 20:41:22 tj Exp $
+
+Include /etc/ssh/sshd_config.d/*.conf
+
+SyslogFacility AUTH
+LogLevel INFO
+LoginGraceTime 2m
+PermitRootLogin no
+StrictModes yes
+MaxAuthTries 3
+MaxSessions 10
+PubkeyAuthentication yes
+PermitEmptyPasswords no
+ChallengeResponseAuthentication no
+UsePAM no
+AllowAgentForwarding no
+AllowTcpForwarding no
+X11Forwarding no
+TCPKeepAlive no
+UseDNS no
+PermitTunnel no
+AcceptEnv LANG LC_*
+Subsystem sftp	/usr/lib/openssh/sftp-server
+PasswordAuthentication no

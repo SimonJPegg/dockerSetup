@@ -1,0 +1,94 @@
+---
+- hosts: swarm
+  tasks:
+    - name: Remove preinstalled docker
+      become: true
+      apt:
+        autoclean: yes
+        autoremove: yes
+        state: absent
+        pkg:
+          - docker
+          - docker-engine
+          - docker.io
+          - containerd
+          - runc
+
+    - name: Install pre-reqs
+      become: true
+      apt:
+        update_cache: yes
+        pkg:
+          - ca-certificates 
+          - curl
+          - gnupg
+          - lsb-release
+          - python3-pip
+
+
+    - name: create keyrings dir
+      become: true
+      file: path=/etc/apt/keyrings state=directory mode=777 owner=root group=root
+
+    - name: Get Docker GPG key
+      become: true
+      shell: curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+      args:
+        creates: /etc/apt/keyrings/docker.gpg
+
+    - name: Set-up repo
+      become: true
+      shell: echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+      args:
+        creates: /etc/apt/sources.list.d/docker.list
+
+    - name: install docker
+      become: true
+      apt:
+        update_cache: yes
+        pkg:
+          - docker-ce 
+          - docker-ce-cli 
+          - containerd.io 
+          - docker-compose-plugin
+
+    - name: Install docker-compose
+      pip: name=docker-compose state=latest
+
+    - name: Start Docker
+      become: true
+      service: name=docker enabled=yes state=started
+
+    - name: add group
+      become: true
+      user: name="{{ ansible_user_id }}" groups=docker append=yes generate_ssh_key=yes
+      register: add_group
+
+    - name: reset ssh connection to allow user changes to affect 'current login user'
+      meta: reset_connection
+    
+    - name: Get docker info
+      shell: docker info
+      register: docker_info
+      changed_when: False
+
+
+- hosts: swarmControllers
+  gather_facts: yes
+  tasks:
+    - name: create swarm manager
+      shell: docker swarm init --advertise-addr {{ ansible_default_ipv4.address }}
+      when: "docker_info.stdout.find('Swarm: inactive') > 0"
+
+    - name: Get docker swarm worker token
+      shell: docker swarm join-token -q worker
+      register: swarm_worker_token
+
+
+- hosts: swarmWorkers
+  tasks:
+    - name: Join the swarm
+      shell: "docker swarm join --token {{ hostvars[groups['swarmControllers'][0]]['swarm_worker_token']['stdout'] }} {{ hostvars[groups['swarmControllers'][0]]['ansible_all_ipv4_addresses'][2] }}:2377"
+      when: "docker_info.stdout.find('Swarm: inactive') > 0"
+      retries: 10
+      delay: 5

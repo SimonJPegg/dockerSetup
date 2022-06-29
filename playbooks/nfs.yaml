@@ -1,0 +1,71 @@
+---
+- hosts: nfsServers
+  tasks:
+
+    - name: Create the share directories
+      become: true
+      file: path=/srv/nfs4/docker state=directory mode=755 owner=vagrant group=vagrant
+
+    - name: Ensure NFS utilities are installed.
+      become: true
+      apt:
+        name:
+          - nfs-common
+          - nfs-kernel-server
+        state: present
+
+    - name: Update NFS exports
+      become: true
+      template:
+        src: "{{ playbook_dir }}/config/nfs/exports.j2"
+        dest: /etc/exports
+        backup: yes
+        owner: 0
+        group: 0
+        mode: 644
+      notify:
+        - restart nfs
+        -
+    - name: Update NFS common config
+      become: true
+      template:
+        src: "{{ playbook_dir }}/config/nfs/nfs-common.j2"
+        dest: /etc/default/nfs-common
+        backup: yes
+        owner: 0
+        group: 0
+        mode: 644
+      notify:
+        - restart nfs
+
+    - name: Update NFS kernel config
+      become: true
+      template:
+        src: "{{ playbook_dir }}/config/nfs/nfs-kernel-server.j2"
+        dest: /etc/default/nfs-kernel-server
+        backup: yes
+        owner: 0
+        group: 0
+        mode: 644
+      notify:
+        - restart nfs
+  handlers:
+    - name: restart nfs
+      become: true
+      service: name=nfs-kernel-server state=restarted
+
+- hosts: nfsClients
+  tasks:
+    - name: install NFS common
+      become: true
+      apt: name=nfs-common state=present update_cache=yes
+
+    - name: Create mountable dir
+      become: true
+      file: path=/srv/docker/volumes state=directory mode=777 owner=root group=root
+
+    - name: set mountpoints
+      become: true
+      mount: name=/srv/docker/volumes src={{ hostvars[groups['nfsServers'][0]]['ansible_all_ipv4_addresses'][1] }}:/ fstype=nfs opts=defaults,proto=tcp,port=2049,vers=4 dump=0 passno=2 state=mounted
+
+

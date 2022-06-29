@@ -1,0 +1,34 @@
+- hosts: all
+  tasks:
+    - name: Add Ansible SSH key
+      authorized_key:
+        user: vagrant
+        state: present
+        key: "{{ lookup('file', item) }}"
+      with_fileglob:
+        - config/ssh/*.pub
+
+    - name: Update SSH config
+      become: true
+      template:
+        src: "{{ playbook_dir }}/config/ssh/sshd_config.j2"
+        dest: /etc/ssh/sshd_config
+        backup: yes
+        owner: 0
+        group: 0
+        mode: 644
+        validate: '/usr/sbin/sshd -T -f %s'
+      notify:
+        - restart sshd
+
+    - name: Upgrade all Apt packages
+      become: true
+      apt: upgrade=dist force_apt_get=yes
+
+    - debug: var=ansible_all_ipv4_addresses
+    - debug: var=ansible_default_ipv4.address
+
+  handlers:
+    - name: restart sshd
+      become: true
+      service: name=sshd state=restarted
